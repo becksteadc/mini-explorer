@@ -10,6 +10,7 @@ UITextbox *textbox;
 UIButton *button;
 UILabel *label;
 UICode *dir_listing;
+//UISplitPane *split;
 
 struct String_Linked_List {
 	char *str;
@@ -17,26 +18,51 @@ struct String_Linked_List {
 	struct String_Linked_List *next;
 };
 
-
+/* Event callback functions. (listeners) */
 int ButtonMessage(UIElement *element, UIMessage message, int di, void *dp);
 int TextboxMessage(UIElement *element, UIMessage message, int di, void *dp);
+
+/* background functionality & helper functions. */
 int list_dir(const char *path, char **result);
 int pack_SLL_to_CString(struct String_Linked_List *head, char **result);
+void cleanup_SLL(struct String_Linked_List *list);
 
+/* Entry Point -- for linux support, add conditional compilation here. */
 int WinMain(HINSTANCE instance, HINSTANCE previousInstance,
 			LPSTR commandline, int showCommand)
 {
 	UIInitialise();
 	UIWindow *window = UIWindowCreate(0, 0, "hello", 640, 480);
 
-	UIPanel *panel = UIPanelCreate(&window->e, UI_PANEL_GRAY |
+	UISplitPane *split1 = UISplitPaneCreate(&window->e, UI_SPLIT_PANE_VERTICAL, 0.5f);
+	UIPanel *panel = UIPanelCreate(&split1->e, UI_PANEL_GRAY |
 									UI_PANEL_MEDIUM_SPACING);
 	
-	button = UIButtonCreate(&panel->e, 0, "Push", -1);
 	textbox = UITextboxCreate(&panel->e, 0);
 	label = UILabelCreate(&panel->e, 0, "text", -1);
-	dir_listing = UICodeCreate(&panel->e, 0); 
+	dir_listing = UICodeCreate(&split1->e, 0); 
+//	UITable *test_table = UITableCreate(&panel->e, 0, "test\t1\t2\t3\tdone");
+//	test_table->itemCount = 10;
+//	UITableResizeColumns(test_table);
+//	test_table->e.messageUser = MyTableMessage;
+//
 
+	button = UIButtonCreate(&panel->e, 0, "Push", -1);
+	
+
+	
+	//split = UISplitPaneCreate(&window->e, UI_SPLIT_PANE_VERTICAL, .08f);
+/*
+	{
+		UICode *code = UICodeCreate(&split->e, 0);
+		char *buffer = (char *) malloc(262144);
+		FILE *f = fopen("luigi.h", "rb");
+		size_t size = fread(buffer, 1, 262144, f);
+		fclose(f);
+		UICodeInsertContent(code, buffer, size, true);
+		UICodeFocusLine(code, 0);
+	}
+*/
 	button->e.messageUser = ButtonMessage;
 	textbox->e.messageUser = TextboxMessage;
 
@@ -61,6 +87,7 @@ void cleanup_SLL(struct String_Linked_List *l)
 }
 
 //caller must free returned result
+//returns number of bytes put into the **result
 int list_dir(const char *path, char **result)
 {
 	struct dirent *entry;
@@ -100,17 +127,19 @@ int list_dir(const char *path, char **result)
 		}
 	}
 	
-	if (pack_SLL_to_CString(names, result)) {
-		printf("Panic -- pack_SLL_to_CString received null pointer\n");
+	size_t string_bytes = pack_SLL_to_CString(names, result);
+	if (string_bytes < 0) {
+		printf("Panic -- pack_SLL_to_CString failed.\n");
 		exit(-1);
 	}
 	cleanup_SLL(names);
 
-	return 0;
+	return string_bytes;
 }
 
 //helper to list_dir()
 //caller is responsible for dynamically allocated *result
+//negative return indicates error, otherwise return is size of string (bytes)
 int pack_SLL_to_CString(struct String_Linked_List *head, char **result)
 {
 	if (head == NULL) {
@@ -150,8 +179,7 @@ int pack_SLL_to_CString(struct String_Linked_List *head, char **result)
 		putchar((*result)[handle]);
 	}
 
-	printf("DEBUG: returning zero\n");
-	return 0;
+	return string_total_length;
 }
 
 //#include <stdio.h> //remove once snprintf is no longer needed
@@ -160,7 +188,18 @@ int ButtonMessage(UIElement *element, UIMessage message, int di, void *dp)
 	if (message == UI_MSG_CLICKED) {
 		//TODO finish implementing properly
 		char *result;
-		list_dir(".", &result);
+		size_t listing_bytes = list_dir(".", &result);
+		printf("DEBUG: inserting %d bytes into UICode: dir_listing\n", listing_bytes);
+		UICodeInsertContent(dir_listing, result, listing_bytes, 1);
+		UICodeFocusLine(dir_listing, 0);
+		UIElementRefresh(&dir_listing->e);
+		UIElementRefresh(dir_listing->e.parent);
+
+		/* --was used for debugging -- now commented out
+		UILabelSetContent(label, result, listing_bytes);
+		UIElementRefresh(&label->e);
+		UIElementRefresh(label->e.parent);
+		*/
 	}
 	return 0;
 }
