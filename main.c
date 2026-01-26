@@ -19,6 +19,7 @@ struct String_Linked_List {
 };
 
 struct String_Linked_List Global_Dir_Listing;
+//int Global_Dir_Listing_Length = 1;
 /* Event callback functions. (listeners) */
 int ButtonMessage(UIElement *element, UIMessage message, int di, void *dp);
 int TextboxMessage(UIElement *element, UIMessage message, int di, void *dp);
@@ -55,13 +56,13 @@ int WinMain(HINSTANCE instance, HINSTANCE previousInstance,
 
 	button->e.messageUser = ButtonMessage;
 	textbox->e.messageUser = TextboxMessage;
-	//dir_listing->e.messageUser = TableMessage;
 	dir_listing->e.messageUser = TableContents;
-	dir_listing->itemCount = 2; //debug only for now -- TODO
+	dir_listing->itemCount = 1; //debug only for now -- TODO -- make this not constant, and have it be updated in the code
 	UITableResizeColumns(dir_listing);
 	
-
-	return UIMessageLoop();
+	int rval = UIMessageLoop();
+	cleanup_SLL(Global_Dir_Listing.next);
+	return rval;
 }
 
 void cleanup_SLL(struct String_Linked_List *l)
@@ -81,9 +82,6 @@ void cleanup_SLL(struct String_Linked_List *l)
 	return;
 }
 
-//replaces the duplicated functionality in list_dir
-//TODO - actually finish refactoring that: remove the duplicated code
-//TODO - transition to using linked list + table in gui rather than string + code block
 int create_dir_SLL(const char *path, struct String_Linked_List *result)
 {
 	struct dirent *entry;
@@ -117,7 +115,7 @@ int create_dir_SLL(const char *path, struct String_Linked_List *result)
 		}
 	}
 
-	result = list_head; //"return" the result
+	*result = *list_head; //"return" the result
 	return 0;
 } 
 
@@ -129,6 +127,30 @@ int list_dir(const char *path, struct String_Linked_List *result)
 {
 	create_dir_SLL(path, result);
 	return 0;
+}
+
+void print_SLL(const struct String_Linked_List *restrict list)
+{
+	const struct String_Linked_List *ptr = list;
+	int i = 0;
+	while (ptr != NULL) {
+		printf("String Linked List element %d: %s\n", i++, ptr->str);
+		if (i > 10) {
+			printf("Over 1000 entries. Exiting print subroutine.\n");
+			return;
+		}
+	}
+}
+
+int get_SLL_len(const struct String_Linked_List *restrict list)
+{
+	int len = 0;
+	const struct String_Linked_List *ptr = list;
+	while (ptr != NULL && len < 1024) {
+		ptr = ptr->next;
+		++len;
+	}
+	return len;
 }
 
 //NOTE: kind of defunct for now. Deprecated.
@@ -176,34 +198,21 @@ int pack_SLL_to_CString(struct String_Linked_List *head, char **result)
 
 	return string_total_length;
 }
-/* //note: commented out, using TableContents below for now
-int SELECTED_ELEMENT = 1;
-int TableMessage(UIElement *element, UIMessage message, int di, void *dp)
-{
-	if (message == UI_MSG_TABLE_GET_ITEM) {
-		UITableGetItem *item_ptr = (UITableGetItem *) dp;
-		item_ptr->isSelected = (item_ptr->index == SELECTED_ELEMENT);
-		size_t bytes = snprintf(item_ptr->buffer, item_ptr->bufferBytes, "debug:"); 
-		printf("DEBUG - TableMessage\n");
-		printf("%d bytes into buffer. Contents: %s\n", bytes, item_ptr->buffer);
-		return bytes;
-	}
-}
-*/
 
-//#include <stdio.h> //remove once snprintf is no longer needed
 int ButtonMessage(UIElement *element, UIMessage message, int di, void *dp)
 {
 	if (message == UI_MSG_CLICKED) {
 		struct String_Linked_List result;
 		uint8_t list_status = list_dir(".", &result);
+		//assert(result != NULL); //debugging
 		printf("Made it past list_dir\n");
 		fflush(stdout);
 		memcpy(&Global_Dir_Listing, &result, sizeof(struct String_Linked_List));
 		printf("Made it past memcpy op\n");
 		fflush(stdout);
-		//if (list_status != 0) { printf("list_dir returned nonzero in ButtonMessage\n"); } //TODO -- better handle this, once the error code is actually relevant
+		if (list_status != 0) { printf("list_dir returned nonzero in ButtonMessage\n"); } //TODO -- better handle this, once the error code is actually relevant
 
+		dir_listing->itemCount = get_SLL_len(&Global_Dir_Listing); //Technically more efficient to compute this and store to global var Global_Dir_Listing_Len
 		UIElementRefresh(&dir_listing->e);
 		UIElementRefresh(dir_listing->e.parent);
 		/* --was used for debugging -- now commented out
@@ -211,6 +220,7 @@ int ButtonMessage(UIElement *element, UIMessage message, int di, void *dp)
 		UIElementRefresh(&label->e);
 		UIElementRefresh(label->e.parent);
 		*/
+		print_SLL(&result);
 	}
 	return 0;
 }
